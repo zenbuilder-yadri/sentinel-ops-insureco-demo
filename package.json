@@ -10,6 +10,8 @@
     "demo:underwrite": "node demo/run-scenarios.js --agent underwrite-ai",
     "demo:fraud": "node demo/run-scenarios.js --agent fraud-hunter",
     "demo:advisor": "node demo/run-scenarios.js --agent policy-advisor",
+    "demo:models": "node demo/webhook-models-demo.js",
+    "demo:models:verbose": "node demo/webhook-models-demo.js --verbose",
     "test": "node --test tests/*.test.js",
     "test:compliance": "node --test tests/compliance/**/*.test.js",
     "seed": "node platform/data/seed.js",
