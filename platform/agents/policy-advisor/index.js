@@ -43,7 +43,7 @@ export class PolicyAdvisor {
       .filter(p => p.customerId === customerId);
 
     const readPolicies = await guardedAction(
-      AGENT_ID, 'Read', { file_path: `data/policies?customerId=${customerId}` },
+      AGENT_ID, 'Read', { file_path: `data/policies/${customerId}` },
       () => customerPolicies,
     );
     steps.push(readPolicies);
@@ -82,7 +82,7 @@ export class PolicyAdvisor {
    */
   async attemptReadClaims(customerId) {
     return guardedAction(
-      AGENT_ID, 'Read', { file_path: `data/claims?customerId=${customerId}` },
+      AGENT_ID, 'Read', { file_path: `data/claims/${customerId}` },
       () => this.store.getClaimsForCustomer(customerId),
     );
   }

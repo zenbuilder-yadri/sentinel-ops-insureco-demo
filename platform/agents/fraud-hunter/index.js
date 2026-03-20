@@ -42,7 +42,7 @@ export class FraudHunter {
 
     // Step 2: Read all claims for this customer (pattern analysis)
     const readHistory = await guardedAction(
-      AGENT_ID, 'Read', { file_path: `data/claims?customerId=${claim.customerId}` },
+      AGENT_ID, 'Read', { file_path: `data/claims/${claim.customerId}` },
       () => this.store.getClaimsForCustomer(claim.customerId),
     );
     steps.push(readHistory);

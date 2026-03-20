@@ -42,7 +42,7 @@ export class UnderwriteAI {
 
     // Step 2: Read claims history
     const readClaims = await guardedAction(
-      AGENT_ID, 'Read', { file_path: `data/claims?customerId=${customerId}` },
+      AGENT_ID, 'Read', { file_path: `data/claims/${customerId}` },
       () => this.store.getClaimsForCustomer(customerId),
     );
     steps.push(readClaims);
