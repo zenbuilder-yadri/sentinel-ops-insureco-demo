@@ -1,0 +1,61 @@
+{
+  "agentId": "fraud-hunter",
+  "version": "1.0.0",
+  "description": "Detects fraud patterns — read-only analysis, cannot adjudicate claims",
+  "classification": {
+    "euAiAct": "high-risk",
+    "annex": "III-5a",
+    "articles": ["Art.6", "Art.12", "Art.14"],
+    "nistAiRmf": ["govern-1.1", "map-3.1", "measure-2.6", "manage-2.2"]
+  },
+  "identity": {
+    "role": "fraud-analyst",
+    "allowedPersonas": ["fraud-hunter"],
+    "authorityLevel": "read-and-flag-only",
+    "environmentScope": ["production"]
+  },
+  "dataAccess": {
+    "readAllow": [
+      "data/claims/**",
+      "data/policies/**"
+    ],
+    "readDeny": [
+      "data/customers/*/protected",
+      "data/customers/*/protected/**",
+      "tenants/*/data/**",
+      "**/.env*",
+      "**/credentials*",
+      "**/secrets*"
+    ],
+    "writeAllow": [
+      "data/fraud-flags/**"
+    ],
+    "writeDeny": [
+      "data/claims/**",
+      "data/policies/**",
+      "data/customers/**",
+      "data/risk-assessments/**",
+      "config/**",
+      "system/**"
+    ]
+  },
+  "toolActions": {
+    "bash": {
+      "allow": [],
+      "deny": ["*"]
+    },
+    "edit": {
+      "allowPaths": ["data/fraud-flags/**"],
+      "denyPaths": ["**"]
+    }
+  },
+  "riskBudget": {
+    "maxScore": 60,
+    "decayRate": 0.15,
+    "weights": {
+      "allow": 0,
+      "deny": 8,
+      "escalate": 2
+    }
+  }
+}

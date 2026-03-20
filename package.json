@@ -1,0 +1,22 @@
+{
+  "name": "insureco-ai-platform",
+  "version": "1.0.0",
+  "description": "AI-governed insurance SaaS platform — EU AI Act & NIST AI RMF compliance via Sentinel-Ops",
+  "type": "module",
+  "scripts": {
+    "start": "node platform/server.js",
+    "demo": "node demo/run-scenarios.js",
+    "demo:claims": "node demo/run-scenarios.js --agent claims-bot",
+    "demo:underwrite": "node demo/run-scenarios.js --agent underwrite-ai",
+    "demo:fraud": "node demo/run-scenarios.js --agent fraud-hunter",
+    "demo:advisor": "node demo/run-scenarios.js --agent policy-advisor",
+    "test": "node --test tests/**/*.test.js",
+    "test:compliance": "node --test tests/compliance/**/*.test.js",
+    "seed": "node platform/data/seed.js",
+    "deploy:soe": "node deploy/deploy-soe.js"
+  },
+  "keywords": ["ai-governance", "eu-ai-act", "nist-ai-rmf", "sentinel-ops", "insurance", "compliance"],
+  "license": "Apache-2.0",
+  "dependencies": {},
+  "devDependencies": {}
+}

@@ -1,0 +1,56 @@
+{
+  "agentId": "policy-advisor",
+  "version": "1.0.0",
+  "description": "Customer-facing chatbot — read-only, no claims access, no system commands",
+  "classification": {
+    "euAiAct": "limited-risk",
+    "articles": ["Art.52", "Art.13"],
+    "nistAiRmf": ["govern-1.1", "map-1.1", "measure-2.5"]
+  },
+  "identity": {
+    "role": "customer-advisor",
+    "allowedPersonas": ["policy-advisor"],
+    "authorityLevel": "read-only",
+    "environmentScope": ["production"]
+  },
+  "dataAccess": {
+    "readAllow": [
+      "data/customers/*",
+      "data/policies/**"
+    ],
+    "readDeny": [
+      "data/customers/*/protected",
+      "data/customers/*/protected/**",
+      "data/claims/**",
+      "data/fraud-flags/**",
+      "data/risk-assessments/**",
+      "tenants/*/data/**",
+      "**/.env*",
+      "**/credentials*",
+      "**/secrets*"
+    ],
+    "writeAllow": [],
+    "writeDeny": [
+      "**"
+    ]
+  },
+  "toolActions": {
+    "bash": {
+      "allow": [],
+      "deny": ["*"]
+    },
+    "edit": {
+      "allowPaths": [],
+      "denyPaths": ["**"]
+    }
+  },
+  "riskBudget": {
+    "maxScore": 40,
+    "decayRate": 0.2,
+    "weights": {
+      "allow": 0,
+      "deny": 15,
+      "escalate": 5
+    }
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "agentId": "underwrite-ai",
+  "version": "1.0.0",
+  "description": "Risk scoring for policy pricing — cannot access protected characteristics",
+  "classification": {
+    "euAiAct": "high-risk",
+    "annex": "III-5b",
+    "articles": ["Art.6", "Art.10", "Art.13"],
+    "nistAiRmf": ["govern-1.1", "map-2.1", "measure-2.3", "manage-1.3"]
+  },
+  "identity": {
+    "role": "underwriter",
+    "allowedPersonas": ["underwrite-ai"],
+    "authorityLevel": "risk-scoring-only",
+    "environmentScope": ["production"]
+  },
+  "dataAccess": {
+    "readAllow": [
+      "data/customers/*",
+      "data/policies/**",
+      "data/claims/**"
+    ],
+    "readDeny": [
+      "data/customers/*/protected",
+      "data/customers/*/protected/**",
+      "tenants/*/data/**",
+      "**/.env*",
+      "**/credentials*",
+      "**/secrets*"
+    ],
+    "writeAllow": [
+      "data/risk-assessments/**"
+    ],
+    "writeDeny": [
+      "data/claims/**",
+      "data/policies/**",
+      "data/customers/**",
+      "config/**",
+      "system/**"
+    ]
+  },
+  "toolActions": {
+    "bash": {
+      "allow": [],
+      "deny": ["*"]
+    },
+    "edit": {
+      "allowPaths": ["data/risk-assessments/**"],
+      "denyPaths": ["data/policies/**", "data/customers/**", "data/claims/**"]
+    }
+  },
+  "riskBudget": {
+    "maxScore": 70,
+    "decayRate": 0.1,
+    "weights": {
+      "allow": 0,
+      "deny": 10,
+      "escalate": 3
+    }
+  }
+}

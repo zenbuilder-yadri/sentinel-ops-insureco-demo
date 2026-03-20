@@ -1,0 +1,62 @@
+{
+  "agentId": "claims-bot",
+  "version": "1.0.0",
+  "description": "Auto-adjudicates insurance claims within defined limits",
+  "classification": {
+    "euAiAct": "high-risk",
+    "annex": "III-5b",
+    "articles": ["Art.6", "Art.12", "Art.14"],
+    "nistAiRmf": ["govern-1.1", "map-2.1", "measure-2.6", "manage-2.1"]
+  },
+  "identity": {
+    "role": "claims-adjudicator",
+    "allowedPersonas": ["claims-bot"],
+    "authorityLevel": "auto-adjudicate-limited",
+    "environmentScope": ["production"]
+  },
+  "dataAccess": {
+    "readAllow": [
+      "data/claims/**",
+      "data/policies/**",
+      "data/customers/*"
+    ],
+    "readDeny": [
+      "data/customers/*/protected",
+      "data/customers/*/protected/**",
+      "tenants/*/data/**",
+      "**/.env*",
+      "**/credentials*",
+      "**/secrets*"
+    ],
+    "writeAllow": [
+      "data/claims/**",
+      "data/fraud-flags/**"
+    ],
+    "writeDeny": [
+      "data/policies/**",
+      "data/customers/**",
+      "data/risk-assessments/**",
+      "config/**",
+      "system/**"
+    ]
+  },
+  "toolActions": {
+    "bash": {
+      "allow": [],
+      "deny": ["*"]
+    },
+    "edit": {
+      "allowPaths": ["data/claims/**"],
+      "denyPaths": ["data/policies/**", "data/customers/**", "config/**"]
+    }
+  },
+  "riskBudget": {
+    "maxScore": 80,
+    "decayRate": 0.1,
+    "weights": {
+      "allow": 0,
+      "deny": 5,
+      "escalate": 2
+    }
+  }
+}
