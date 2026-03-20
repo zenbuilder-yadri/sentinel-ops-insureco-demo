@@ -2,11 +2,14 @@
  * Sentinel-Ops client — wraps the SOE evaluate API.
  * Every agent action goes through this gate before execution.
  *
- * Config via env:
- *   SOE_MODE=local  — evaluate locally using SOE definition files (no API needed)
- *   SOE_API_URL     — Sentinel-Ops API endpoint (default: http://localhost:3000)
+ * Required env:
+ *   SOE_API_URL     — Sentinel-Ops API endpoint (your CFN stack URL)
  *   SOE_API_KEY     — API key auth
  *   SOE_JWT_TOKEN   — JWT auth (takes precedence over API key)
+ *
+ * Internal (test only):
+ *   SOE_MODE=local  — used by test suite to evaluate against .soe.json files
+ *                      without a running Sentinel-Ops instance
  */
 
 import { readFileSync } from 'node:fs';
@@ -14,8 +17,8 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { minimatch } from './soe-local.js';
 
-const SOE_API_URL = process.env.SOE_API_URL || 'http://localhost:3000';
-const SOE_MODE = process.env.SOE_MODE || (process.env.SOE_API_KEY || process.env.SOE_JWT_TOKEN ? 'remote' : 'local');
+function getMode() { return process.env.SOE_MODE === 'local' ? 'local' : 'remote'; }
+function getApiUrl() { return process.env.SOE_API_URL; }
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SOE_DIR = resolve(__dirname, '..', 'soe-definitions');
@@ -106,16 +109,36 @@ function authHeaders() {
 
 /**
  * Evaluate a tool call against the agent's SOE.
- * In local mode: evaluates using SOE definition files directly.
- * In remote mode: calls Sentinel-Ops API (fail-closed on error).
+ * Calls the Sentinel-Ops API deployed in your AWS account.
+ * Fail-closed: if the API is unreachable or credentials missing, all actions are denied.
+ *
+ * SOE_MODE=local is reserved for the test suite only.
  */
 export async function evaluate(agentId, toolName, toolInput) {
-  if (SOE_MODE === 'local') {
+  if (getMode() === 'local') {
     return evaluateLocal(agentId, toolName, toolInput);
   }
 
+  if (!getApiUrl()) {
+    return {
+      decision: 'deny',
+      reason: 'SOE_API_URL not configured. Deploy Sentinel-Ops in your AWS account and set SOE_API_URL + SOE_API_KEY. See https://yadriworks.ai/docs',
+      layer: 'client-error',
+      failClosed: true,
+    };
+  }
+
+  if (!process.env.SOE_API_KEY && !process.env.SOE_JWT_TOKEN) {
+    return {
+      decision: 'deny',
+      reason: 'No SOE credentials. Set SOE_API_KEY or SOE_JWT_TOKEN. See https://yadriworks.ai/docs',
+      layer: 'client-error',
+      failClosed: true,
+    };
+  }
+
   try {
-    const res = await fetch(`${SOE_API_URL}/v1/evaluate`, {
+    const res = await fetch(`${getApiUrl()}/v1/evaluate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ appId: agentId, toolName, toolInput }),
@@ -144,16 +167,19 @@ export async function evaluate(agentId, toolName, toolInput) {
 }
 
 /**
- * Deploy an SOE definition for an agent.
- * In local mode: no-op (definitions are read from disk).
+ * Deploy an SOE definition to the Sentinel-Ops API.
  */
 export async function deploy(soeDefinition) {
-  if (SOE_MODE === 'local') {
+  if (getMode() === 'local') {
     return { deployed: true, mode: 'local', agentId: soeDefinition.agentId };
   }
 
+  if (!getApiUrl() || (!process.env.SOE_API_KEY && !process.env.SOE_JWT_TOKEN)) {
+    return { deployed: false, error: 'SOE_API_URL and SOE_API_KEY required. Deploy Sentinel-Ops first. See https://yadriworks.ai/docs' };
+  }
+
   try {
-    const res = await fetch(`${SOE_API_URL}/v1/deploy`, {
+    const res = await fetch(`${getApiUrl()}/v1/deploy`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ soe: soeDefinition }),

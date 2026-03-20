@@ -12,85 +12,69 @@ Insurance companies deploying AI agents face strict regulatory requirements:
 
 ## The Solution
 
-Every AI agent action passes through a **Safe Operating Envelope (SOE)** enforced by Sentinel-Ops before execution. The SOE defines what each agent can do, what data it can access, and what authority it has — then enforces it deterministically.
+Every AI agent action passes through a **Safe Operating Envelope (SOE)** enforced by [Sentinel-Ops](https://yadriworks.ai/docs) before execution. Sentinel-Ops is deployed as a **CloudFormation stack in your AWS account** and provides:
+
+- **Deterministic pre-filter** — glob/regex pattern matching (<1ms, 95% of calls)
+- **Sentinel AI** — reasoning for ambiguous cases (2-5s, 5% of calls)
+- **Arbiter** — cumulative risk scoring across all agent actions
+- **Chronicle** — immutable audit trail (DynamoDB + S3)
+- **Beacon** — cross-agent anomaly detection
 
 ```
-Agent wants to act ──> SOE Gate evaluates ──> ALLOW / DENY / ESCALATE
-                                                  │
-                                    Immutable audit trail (Art. 12)
+Agent wants to act ──> Sentinel-Ops SOE Gate ──> ALLOW / DENY / ESCALATE
+                              │
+                   Immutable audit trail (Art. 12)
+                   Cumulative risk scoring
+                   Cross-agent anomaly detection
 ```
 
 ## Architecture
 
 ```
-InsureCo Platform
-├── ClaimsBot ──────── [HIGH RISK] Auto-adjudicates claims < €5,000
-├── UnderwriteAI ───── [HIGH RISK] Risk scoring without protected characteristics
-├── FraudHunter ────── [HIGH RISK] Pattern detection (flag-only, no adjudication)
-└── PolicyAdvisor ──── [LIMITED]   Customer Q&A chatbot (read-only)
-         │
-         ▼
-    Sentinel-Ops SOE Gate
-    ├── Deterministic pre-filter (<1ms, 95% of calls)
-    ├── Sentinel AI (ambiguous cases, 5% of calls)
-    ├── Arbiter (cumulative risk scoring)
-    ├── Chronicle (immutable audit trail)
-    └── Beacon (cross-agent anomaly detection)
+InsureCo Platform (this repo)          Sentinel-Ops (your AWS account)
+┌──────────────────────────────┐       ┌─────────────────────────────────┐
+│ ClaimsBot ─── [HIGH RISK]    │       │ ECS Fargate (API)               │
+│ UnderwriteAI ─ [HIGH RISK]   │──────>│ ALB + WAF + HTTPS               │
+│ FraudHunter ── [HIGH RISK]   │ HTTPS │ DynamoDB (audit, risk, SOE)     │
+│ PolicyAdvisor ─ [LIMITED]    │       │ Lambda (rotation, cleanup)      │
+└──────────────────────────────┘       │ S3 (compliance reports)         │
+         soe-client.js                 └─────────────────────────────────┘
+         (evaluates every                 Deployed via CloudFormation
+          agent action)
 ```
 
 ## Prerequisites
 
 - **Node.js 20+** (zero npm dependencies)
-- **Sentinel-Ops** (optional for local testing, required for production) — [contact us](https://yadriworks.ai) for access
+- **Sentinel-Ops** deployed in your AWS account — [get started at yadriworks.ai](https://yadriworks.ai)
 
 ## Quick Start
 
-### Option A: Local Mode (no AWS, no API key)
+### Step 1: Deploy Sentinel-Ops in your AWS account
 
-Evaluate the full SOE enforcement locally — all rules execute from `.soe.json` definition files on disk.
+After signing up, you receive a CloudFormation template and API key.
+
+```bash
+aws cloudformation create-stack \
+  --stack-name sentinel-ops \
+  --template-url <your-cfn-template-url> \
+  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+  --parameters ParameterKey=ApiKey,ParameterValue=<your-api-key>
+```
+
+Wait for the stack to complete. Note your API endpoint URL from the stack outputs.
+
+### Step 2: Clone this repo and configure
 
 ```bash
 git clone https://github.com/zenbuilder-yadri/sentinel-ops-insureco-demo.git
 cd sentinel-ops-insureco-demo
 
-# Run the full test suite (165 tests)
-npm test
-
-# Run the 14 demo scenarios
-node demo/run-scenarios.js
-
-# Launch the dashboard UI
-npm start
-# Open http://localhost:4000
+export SOE_API_URL=https://<your-sentinel-ops-endpoint>
+export SOE_API_KEY=<your-api-key>
 ```
 
-### Option B: Connected Mode (Sentinel-Ops on AWS)
-
-Connect to a live Sentinel-Ops instance for production-grade enforcement with AI reasoning, cumulative risk scoring, and immutable audit trail.
-
-**Step 1: Deploy Sentinel-Ops in your AWS account**
-
-Sentinel-Ops is deployed as a CloudFormation stack in your own AWS account. After purchase, you receive:
-- A CloudFormation template that provisions the full Sentinel-Ops infrastructure (ECS Fargate, ALB, DynamoDB, Lambda, WAF)
-- An API key for authentication
-
-```bash
-# Deploy the CFN stack (provided after purchase)
-aws cloudformation create-stack \
-  --stack-name sentinel-ops \
-  --template-url https://your-cfn-template-url \
-  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
-  --parameters ParameterKey=ApiKey,ParameterValue=your-api-key
-```
-
-**Step 2: Configure environment**
-
-```bash
-export SOE_API_URL=https://your-sentinel-ops-endpoint
-export SOE_API_KEY=your-api-key
-```
-
-**Step 3: Deploy SOE definitions**
+### Step 3: Deploy SOE definitions
 
 Push the 4 agent SOE definitions to your Sentinel-Ops instance:
 
@@ -98,74 +82,37 @@ Push the 4 agent SOE definitions to your Sentinel-Ops instance:
 node deploy/deploy-soe.js
 ```
 
-**Step 4: Run scenarios against live API**
+This registers each agent's Safe Operating Envelope — identity, data access rules, tool permissions, and risk budget.
+
+### Step 4: Run the demo
 
 ```bash
-# All 14 scenarios (now hitting real Sentinel-Ops API)
+# Run all 14 scenarios against your Sentinel-Ops instance
 node demo/run-scenarios.js
 
-# Single agent
-node demo/run-scenarios.js --agent claims-bot
-
-# Dashboard (connected to live API)
-npm start
-```
-
-### What changes between Local and Connected mode?
-
-| Capability | Local Mode | Connected Mode |
-|-----------|------------|----------------|
-| SOE enforcement (allow/deny/escalate) | Deterministic rules from `.soe.json` | Same rules + Sentinel AI for ambiguous cases |
-| Audit trail | In-memory per session | Immutable, append-only DynamoDB + S3 |
-| Cumulative risk scoring | Not available | Arbiter tracks risk across all agent actions |
-| Cross-agent anomaly detection | Not available | Beacon correlates patterns across agents |
-| Fail-closed behavior | Unknown tool → deny | Same + API unreachable → deny |
-| Latency | <1ms | <1ms (95% deterministic), 2-5s (5% AI path) |
-
-## Testing
-
-### Unit Tests (165 tests, zero dependencies)
-
-```bash
-npm test
-```
-
-Validates every SOE assertion — positive and negative — for all 4 agents:
-
-| Test File | What It Validates | Tests |
-|-----------|-------------------|-------|
-| `claims-bot.test.js` | Read/write claims, deny protected data, deny bash, approve/escalate logic | 31 |
-| `underwrite-ai.test.js` | Risk scoring, Art.10/13 compliance, deny protected characteristics | 26 |
-| `fraud-hunter.test.js` | Fraud signals, deny write claims, deny cross-tenant access | 28 |
-| `policy-advisor.test.js` | Q&A responses, deny all writes, deny bash, fail-closed on unknown tools | 38 |
-| `cross-agent.test.js` | Separation of duties, universal denies, deny-first evaluation, fail-closed | 28 |
-| `audit-trail.test.js` | Audit entries on allow, zero side effects on deny, evaluation metadata | 20 |
-
-### Demo Scenarios (14 scenarios)
-
-```bash
-# All agents
-node demo/run-scenarios.js
-
-# Single agent
+# Run a specific agent's scenarios
 node demo/run-scenarios.js --agent claims-bot
 node demo/run-scenarios.js --agent underwrite-ai
 node demo/run-scenarios.js --agent fraud-hunter
 node demo/run-scenarios.js --agent policy-advisor
-```
 
-### Dashboard UI
-
-```bash
+# Launch the dashboard UI
 npm start
 # Open http://localhost:4000
 ```
 
-Click **"Run All Scenarios"** to execute all 14 scenarios with visual results. Four tabs:
-- **Dashboard** — agent fleet overview with SOE constraints and risk badges
-- **Live Demo** — run scenarios, see allow/deny/escalate decisions in real-time
-- **Compliance** — EU AI Act (9 articles) + NIST AI RMF (10 categories) mapping
-- **Audit Trail** — filterable log of all SOE decisions
+Every agent action goes through your Sentinel-Ops API. Allow/deny/escalate decisions are enforced by the SOE gate, logged to the immutable audit trail, and scored by the risk engine.
+
+## What Sentinel-Ops Provides
+
+| Capability | What It Does |
+|-----------|-------------|
+| **SOE Gate** | Evaluates every tool call against the agent's SOE definition. Deterministic pre-filter handles 95% in <1ms. |
+| **Sentinel AI** | Classifies ambiguous cases that don't match clear allow/deny patterns. |
+| **Arbiter** | Tracks cumulative risk across all agent actions. Tightens envelope when risk budget depletes. |
+| **Chronicle** | Immutable, append-only audit trail. Every decision logged with agent, tool, path, decision, reason, timestamp. |
+| **Beacon** | Detects anomalous patterns across agents — e.g., sudden spike in deny events, unusual access patterns. |
+| **Fail-closed** | If the API is unreachable, all agent actions are denied. Safety over availability. |
 
 ## Demo Scenarios (14 total)
 
@@ -202,6 +149,38 @@ Click **"Run All Scenarios"** to execute all 14 scenarios with visual results. F
 | 12 | Modify a policy | **DENY** | Read-only agent |
 | 13 | Read claims data | **DENY** | Scope boundary |
 | 14 | Execute system command | **DENY** | No bash access |
+
+## Testing
+
+### Unit Tests (165 tests)
+
+```bash
+npm test
+```
+
+The test suite validates every SOE rule definition against the agent behavior — positive (authorized actions execute) and negative (unauthorized actions are denied with zero side effects).
+
+| Test File | What It Validates | Tests |
+|-----------|-------------------|-------|
+| `claims-bot.test.js` | Read/write claims, deny protected data, deny bash, approve/escalate logic | 31 |
+| `underwrite-ai.test.js` | Risk scoring, Art.10/13 compliance, deny protected characteristics | 26 |
+| `fraud-hunter.test.js` | Fraud signals, deny write claims, deny cross-tenant access | 28 |
+| `policy-advisor.test.js` | Q&A responses, deny all writes, deny bash, fail-closed on unknown tools | 38 |
+| `cross-agent.test.js` | Separation of duties, universal denies, deny-first evaluation, fail-closed | 28 |
+| `audit-trail.test.js` | Audit entries on allow, zero side effects on deny, evaluation metadata | 20 |
+
+### Dashboard UI
+
+```bash
+npm start
+# Open http://localhost:4000
+```
+
+Click **"Run All Scenarios"** to execute all 14 scenarios with visual results. Four tabs:
+- **Dashboard** — agent fleet overview with SOE constraints and risk badges
+- **Live Demo** — run scenarios, see allow/deny/escalate decisions in real-time
+- **Compliance** — EU AI Act (9 articles) + NIST AI RMF (10 categories) mapping
+- **Audit Trail** — filterable log of all SOE decisions
 
 ## SOE Definitions
 
@@ -242,8 +221,8 @@ See [docs/compliance-matrix.md](docs/compliance-matrix.md) for the full mapping 
 sentinel-ops-insureco-demo/
 ├── platform/
 │   ├── server.js                 # Insurance SaaS API + Dashboard server
-│   ├── soe-client.js             # Sentinel-Ops client (local + remote modes)
-│   ├── soe-local.js              # Lightweight glob matching (zero deps)
+│   ├── soe-client.js             # Sentinel-Ops API client
+│   ├── soe-local.js              # Glob matching (used by test suite)
 │   ├── data/seed.js              # Mock customers, policies, claims
 │   └── agents/
 │       ├── claims-bot/           # Auto-adjudication (HIGH RISK)
@@ -262,7 +241,7 @@ sentinel-ops-insureco-demo/
 ├── demo/
 │   └── run-scenarios.js          # 14 demo scenarios (CLI)
 ├── tests/                        # 165 unit tests
-│   ├── helpers.js                # Test framework + assertion helpers
+│   ├── helpers.js
 │   ├── claims-bot.test.js
 │   ├── underwrite-ai.test.js
 │   ├── fraud-hunter.test.js
