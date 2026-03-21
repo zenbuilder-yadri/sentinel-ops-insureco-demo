@@ -48,53 +48,69 @@ InsureCo Platform (this repo)          Sentinel-Ops (your AWS account)
 - **Node.js 20+** (zero npm dependencies)
 - **Sentinel-Ops** deployed in your AWS account — [get started at yadriworks.ai](https://yadriworks.ai)
 
-## Quick Start
+## Quick Start — Run Against Your Own AWS Account
 
-### Step 1: Deploy Sentinel-Ops in your AWS account
+### Step 1: Deploy Sentinel-Ops
 
-After signing up, you receive a CloudFormation template and API key.
+Follow the [Getting Started guide](https://github.com/aiworksllc/sentinel-ops/blob/main/docs/GETTING_STARTED.md) to deploy Sentinel-Ops in your AWS account. This gives you:
+- A Sentinel-Ops API endpoint (ALB URL)
+- An API key (auto-generated in Secrets Manager)
+- Amazon Bedrock for AI reasoning (no external API keys needed)
+
+### Step 2: Retrieve your credentials
 
 ```bash
-aws cloudformation create-stack \
-  --stack-name sentinel-ops \
-  --template-url <your-cfn-template-url> \
-  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
-  --parameters ParameterKey=ApiKey,ParameterValue=<your-api-key>
+# Get API URL from CloudFormation outputs
+SOE_API_URL=$(aws cloudformation describe-stacks --stack-name sentinel-ops \
+  --query 'Stacks[0].Outputs[?OutputKey==`SoeApiUrlHttps`].OutputValue' --output text)
+
+# Get API key from Secrets Manager
+SOE_API_KEY_ARN=$(aws cloudformation describe-stacks --stack-name sentinel-ops \
+  --query 'Stacks[0].Outputs[?OutputKey==`SoeApiKeySecretArn`].OutputValue' --output text)
+SOE_API_KEY=$(aws secretsmanager get-secret-value --secret-id "$SOE_API_KEY_ARN" \
+  --query SecretString --output text | python3 -c "import sys,json; print(json.load(sys.stdin)['key'])")
+
+export SOE_API_URL SOE_API_KEY
 ```
 
-Wait for the stack to complete. Note your API endpoint URL from the stack outputs.
-
-### Step 2: Clone this repo and configure
+### Step 3: Clone and deploy SOE definitions
 
 ```bash
-git clone https://github.com/zenbuilder-yadri/sentinel-ops-insureco-demo.git
-cd sentinel-ops-insureco-demo
+git clone https://github.com/aiworksllc/insureco-ai-platform.git
+cd insureco-ai-platform
 
-export SOE_API_URL=https://<your-sentinel-ops-endpoint>
-export SOE_API_KEY=<your-api-key>
+# Preview what will be deployed
+npm run deploy:soe -- --dry-run
+
+# Deploy 4 agent SOE definitions to your Sentinel-Ops instance
+npm run deploy:soe
 ```
 
-### Step 3: Deploy SOE definitions
+Expected output:
+```
+  InsureCo SOE Deployment
+  Target: https://your-alb.us-east-1.elb.amazonaws.com
+  Definitions: 4
 
-Push the 4 agent SOE definitions to your Sentinel-Ops instance:
+  [OK]   claims-bot           HIGH RISK
+  [OK]   underwrite-ai        HIGH RISK
+  [OK]   fraud-hunter         HIGH RISK
+  [OK]   policy-advisor       LIMITED RISK
 
-```bash
-node deploy/deploy-soe.js
+  Summary: 4/4 deployed
 ```
 
-This registers each agent's Safe Operating Envelope — identity, data access rules, tool permissions, and risk budget.
-
-### Step 4: Run the demo
+### Step 4: Run demo scenarios
 
 ```bash
-# Run all 14 scenarios against your Sentinel-Ops instance
-node demo/run-scenarios.js
+# Run all 14 scenarios (ALLOW / DENY / ESCALATE)
+npm run demo
 
-# Run a specific agent's scenarios
-node demo/run-scenarios.js --agent claims-bot
-node demo/run-scenarios.js --agent underwrite-ai
-node demo/run-scenarios.js --agent fraud-hunter
-node demo/run-scenarios.js --agent policy-advisor
+# Run a specific agent
+npm run demo:claims
+npm run demo:underwrite
+npm run demo:fraud
+npm run demo:advisor
 
 # Launch the dashboard UI
 npm start
